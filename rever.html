@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- 【重要】スマホ表示のための設定 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ULTIMATE EXPANSION - MOBILE OPTIMIZED</title>
+    <style>
+        /* 全体的なリセットとスマホ向けの調整 */
+        body { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            font-family: 'Helvetica Neue', Arial, sans-serif; 
+            background-color: #e0e0e0; 
+            margin: 0;
+            padding: 10px;
+            overflow-x: hidden; 
+            touch-action: manipulation; /* ダブルタップズーム防止 */
+        }
+        h1 { color: #333; margin: 10px 0; font-size: 1.5rem; text-align: center; }
+
+        #start-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        .difficulty-btn { margin: 10px; padding: 15px 40px; font-size: 1.2rem; cursor: pointer; border: none; border-radius: 8px; transition: transform 0.2s; width: 200px; }
+        .difficulty-btn:hover { transform: scale(1.1); }
+        #btn-easy { background: #4caf50; color: white; }
+        #btn-medium { background: #ff9800; color: white; }
+        #btn-hard { background: #f44336; color: white; }
+
+        /* 【修正】ボードをレスポンシブ化 */
+        #game-container { 
+            position: relative; 
+            width: 95vw;           /* 画面幅の95% */
+            height: 95vw;          /* 幅と同じ高さ（正方形） */
+            max-width: 450px;      /* 大きくなりすぎないよう制限 */
+            max-height: 450px; 
+            transition: transform 0.1s; 
+        }
+        #board { 
+            display: grid; 
+            grid-template-columns: repeat(10, 1fr); /* 10等分 */
+            grid-template-rows: repeat(10, 1fr);    /* 10等分 */
+            gap: 2px; 
+            background-color: #333; 
+            padding: 4px; 
+            border: 4px solid #333; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        #vfx-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+        .cell { 
+            width: 100%; 
+            height: 100%; 
+            background-color: #2e7d32; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            cursor: pointer; 
+        }
+        .cell.expanded-zone { background-color: #266329; border: 1px dashed rgba(255,255,255,0.1); }
+
+        /* 【修正】駒のサイズをセルに対して相対的に */
+        .piece { width: 80%; height: 80%; border-radius: 50%; display: none; transition: all 0.3s ease; }
+        .piece.show { display: block; }
+        .black { background-color: #000; box-shadow: 1px 1px 3px rgba(0,0,0,0.5); }
+        .white { background-color: #fff; box-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
+        .special { border: 2px solid #ffd700; box-shadow: 0 0 8px #fff700, inset 0 0 5px #ffd700 !important; }
+
+        @keyframes ripple-gold { 0% { transform: scale(0); opacity: 1; border-width: 6px; } 100% { transform: scale(3); opacity: 0; border-width: 1px; } }
+        .ripple-gold { position: absolute; border: 2px solid #ffd700; border-radius: 50%; animation: ripple-gold 0.6s ease-out forwards; }
+        @keyframes shockwave-red { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        .shockwave-red { position: absolute; border: 2px solid #ff0000; border-radius: 50%; animation: shockwave-red 0.4s ease-out forwards; }
+        .particle { position: absolute; width: 4px; height: 4px; border-radius: 50%; pointer-events: none; z-index: 11; }
+        .shake { animation: shake-anim 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake-anim { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0); } 40%, 60% { transform: translate3d(6px, 0, 0); } }
+
+        /* 【修正】情報表示エリアをスマホ向けにスリム化 */
+        #info { 
+            margin-top: 10px; 
+            width: 95vw; 
+            max-width: 450px; 
+            font-size: 0.8rem; 
+            text-align: center; 
+            background: white; 
+            padding: 10px; 
+            border-radius: 10px; 
+            box-sizing: border-box;
+        }
+        .status { font-weight: bold; margin-bottom: 3px; font-size: 1rem; }
+        .abilities, .zone-info { color: #666; margin-bottom: 2px; }
+        .zone-info { color: #00796b; font-weight: bold; }
+
+        /* 【修正】ボタンを押しやすく、配置を整理 */
+        .controls { 
+            margin-top: 15px; 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); /* 2列に並べる */
+            gap: 8px; 
+            width: 95vw; 
+            max-width: 450px; 
+        }
+        button { 
+            padding: 12px 5px; 
+            cursor: pointer; 
+            border-radius: 8px; 
+            border: none; 
+            background: #333; 
+            color: white; 
+            font-size: 0.9rem;
+            touch-action: manipulation;
+        }
+        #btn-special { background: #fbc02d; color: #000; font-weight: bold; grid-column: span 1; }
+        #btn-shoot { background: #e53935; color: #fff; font-weight: bold; grid-column: span 1; }
+        .reset-btn { background: #757575; grid-column: span 2; } /* リセットは下に長く */
+        #mode-warning { color: #d32f2f; font-weight: bold; height: 1.2em; margin-top: 5px; font-size: 0.8rem; }
+    </style>
+</head>
+<body onload="document.getElementById('start-screen').style.display='flex'">
+    <div id="start-screen">
+        <h1 style="color:white">難易度を選択</h1>
+        <button class="difficulty-btn" id="btn-easy" onclick="startGame('easy')">EASY</button>
+        <button class="difficulty-btn" id="btn-medium" onclick="startGame('medium')">MEDIUM</button>
+        <button class="difficulty-btn" id="btn-hard" onclick="startGame('hard')">HARD</button>
+    </div>
+   
+    <h1>ULTIMATE <span style="color:#e53935">VFX</span></h1>
+   
+    <div id="info">
+        <div class="status" id="turn-display">あなたの番です（黒）</div>
+        <div id="score-display">黒: 2 | 白: 2</div>
+        <div id="ability-display" class="abilities">スペシャル: 1回 | 射殺: 2回</div>
+        <div id="zone-display" class="zone-info">外周使用枠: あなた 3/3 | CPU 3/3</div>
+        <div id="mode-warning"></div>
+    </div>
+   
+    <div id="game-container">
+        <div id="board"></div>
+        <div id="vfx-layer"></div>
+    </div>
+   
+    <div class="controls">
+        <button id="btn-special" onclick="activateSpecialMode()">★スペシャル</button>
+        <button id="btn-shoot" onclick="activateShootMode()">🎯射殺機能</button>
+        <button class="reset-btn" onclick="location.reload()">リセット</button>
+    </div>
+
+    <script>
+        // --- JavaScript Logic (ほぼそのままですが、動作を維持しています) ---
+        const BOARD_SIZE = 10;
+        const EMPTY = 0, BLACK = 1, WHITE = 2, SPECIAL_BLACK = 3, SPECIAL_WHITE = 4;
+        let board = [], currentPlayer = BLACK, isThinking = false, currentDifficulty = 'medium';
+        let playerHasSpecial = true, cpuHasSpecial = true, playerShootsLeft = 2, cpuShootsLeft = 2;
+        let playerExpandedUses = 0, cpuExpandedUses = 0, MAX_EXPANDED_USES = 3;
+        let isSpecialModeActive = false, isShootModeActive = false;
+
+        const boardElement = document.getElementById('board');
+        const containerElement = document.getElementById('game-container');
+        const vfxLayer = document.getElementById('vfx-layer');
+        const turnDisplay = document.getElementById('turn-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const abilityDisplay = document.getElementById('ability-display');
+        const zoneDisplay = document.getElementById('zone-display');
+        const modeWarning = document.getElementById('mode-warning');
+        const btnSpecial = document.getElementById('btn-special');
+        const btnShoot = document.getElementById('btn-shoot');
+
+        function startGame(difficulty) {
+            currentDifficulty = difficulty;
+            document.getElementById('start-screen').style.display = 'none';
+            initGame();
+        }
+
+        function initGame() {
+            board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(EMPTY));
+            board[4][4] = WHITE; board[4][5] = BLACK; board[5][4] = BLACK; board[5][5] = WHITE;
+            currentPlayer = BLACK; isThinking = false; playerHasSpecial = true; cpuHasSpecial = true;
+            playerShootsLeft = 2; cpuShootsLeft = 2; playerExpandedUses = 0; cpuExpandedUses = 0;
+            isSpecialModeActive = false; isShootModeActive = false;
+            createBoardElements(); updateUI();
+        }
+
+        function createBoardElements() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    if (isExpandedZone(r, c)) cell.classList.add('expanded-zone');
+                    cell.dataset.row = r; cell.dataset.col = c;
+                    const piece = document.createElement('div');
+                    piece.classList.add('piece');
+                    cell.appendChild(piece);
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function isExpandedZone(r, c) { return r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1; }
+        function activateSpecialMode() { if (!playerHasSpecial || isThinking || currentPlayer !== BLACK) return; isSpecialModeActive = true; isShootModeActive = false; modeWarning.textContent = "★空きマスを選んで！"; }
+        function activateShootMode() { if (playerShootsLeft <= 0 || isThinking || currentPlayer !== BLACK) return; isShootModeActive = true; isSpecialModeActive = false; modeWarning.textContent = "🎯相手の駒を選んで！"; }
+
+        function handleCellClick(r, c) {
+            if (isThinking || currentPlayer !== BLACK) return;
+
+            if (isShootModeActive) {
+                if (board[r][c] !== EMPTY && !isSameColor(board[r][c], BLACK)) { 
+                    playerShootsLeft--; isShootModeActive = false; modeWarning.textContent = ""; triggerVFX('shoot', r, c); executeEliminateMove(r, c);
+                } else alert("相手の駒を選んでね！"); return;
+            }
+            if (isSpecialModeActive) {
+                if (board[r][c] === EMPTY) {
+                    if (isExpandedZone(r, c) && playerExpandedUses >= MAX_EXPANDED_USES) { alert("外周はもう使えません！"); return; }
+                    playerHasSpecial = false; isSpecialModeActive = false; modeWarning.textContent = ""; triggerVFX('special', r, c); executeSpecialMove(r, c, BLACK);
+                } else alert("空きマスを選んでね！"); return;
+            }
+            if (canPlacePiece(board, r, c, BLACK)) {
+                if (isExpandedZone(r, c) && playerExpandedUses >= MAX_EXPANDED_USES) { alert("外周はもう使えません！"); return; }
+                executeNormalMove(r, c, BLACK);
+            }
+        }
+
+        function executeEliminateMove(r, c) { board[r][c] = EMPTY; processTurn(); }
+        function executeNormalMove(r, c, color) {
+            if (isExpandedZone(r, c)) { if (color === BLACK) playerExpandedUses++; else cpuExpandedUses++; }
+            placeStandardPiece(board, r, c, color);
+            processTurn();
+        }
+        function executeSpecialMove(r, c, color) {
+            if (isExpandedZone(r, c)) { if (color === BLACK) playerExpandedUses++; else cpuExpandedUses++; }
+            const sv = (color === BLACK) ? SPECIAL_BLACK : SPECIAL_WHITE; 
+            board[r][c] = sv;
+            [[ -1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dr, dc]) => {
+                let nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+                    if (board[nr][nc] !== EMPTY && !isSameColor(board[nr][nc], color)) board[nr][nc] = color;
+                }
+            });
+            processTurn();
+        }
+
+        function processTurn() {
+            currentPlayer = (currentPlayer === BLACK) ? WHITE : BLACK;
+            const currentUses = (currentPlayer === BLACK ? playerExpandedUses : cpuExpandedUses);
+            if (!hasValidMoves(currentPlayer, board, currentUses)) {
+                alert(`${currentPlayer === BLACK ? 'あなた' : 'CPU'}はパスします`);
+                currentPlayer = (currentPlayer === BLACK) ? WHITE : BLACK;
+                const nextUses = (currentPlayer === BLACK ? playerExpandedUses : cpuExpandedUses);
+                if (!hasValidMoves(currentPlayer, board, nextUses)) { endGame(); return; }
+                updateUI(); if (currentPlayer === WHITE) setTimeout(computerTurn, 800); return;
+            }
+            updateUI(); if (currentPlayer === WHITE && !isThinking) setTimeout(computerTurn, 800);
+        }
+
+        // --- AI ENGINE ---
+        function computerTurn() {
+            if (currentPlayer !== WHITE) return;
+            isThinking = true; turnDisplay.textContent = "CPUが思考中...";
+            let bestMove = null;
+            try {
+                const moves = getAllValidMoves(WHITE, board, cpuExpandedUses);
+                if (moves.length === 0) { isThinking = false; processTurn(); return; }
+                if (currentDifficulty === 'easy') {
+                    bestMove = moves[Math.floor(Math.random() * moves.length)];
+                } else if (currentDifficulty === 'medium') {
+                    let maxScore = -Infinity;
+                    moves.forEach(m => {
+                        let score = evaluateBoard(simulateMove(board, m.r, m.c, WHITE));
+                        if (score > maxScore) { maxScore = score; bestMove = m; }
+                    });
+                } else { // HARD
+                    let maxVal = -Infinity, alpha = -Infinity, beta = Infinity;
+                    for (let m of moves) {
+                        let nextCpuExp = cpuExpandedUses + (isExpandedZone(m.r, m.c) ? 1 : 0);
+                        let val = minimax(simulateMove(board, m.r, m.c, WHITE), 3, alpha, beta, false, nextCpuExp);
+                        if (val > maxVal) { maxVal = val; bestMove = m; }
+                        alpha = Math.max(alpha, val);
+                    }
+                }
+                isThinking = false; 
+                if (bestMove) executeNormalMove(bestMove.r, bestMove.c, WHITE); else processTurn();
+            } catch (e) { console.error(e); isThinking = false; processTurn(); }
+        }
+
+        function minimax(tempBoard, depth, alpha, beta, isMaxing, currentCpuExp) {
+            if (depth === 0) return evaluateBoard(tempBoard);
+            const color = isMaxing ? WHITE : BLACK;
+            const moves = getMovesForBoard(tempBoard, color, currentCpuExp);
+            if (moves.length === 0) return evaluateBoard(tempBoard);
+            if (isMaxing) {
+                let maxEval = -Infinity;
+                for (let m of moves) {
+                    let eval = minimax(simulateMove(tempBoard, m.r, m.c, WHITE), depth - 1, alpha, beta, false, currentCpuExp + (isExpandedZone(m.r, m.c)?1:0));
+                    maxEval = Math.max(maxEval, eval); alpha = Math.max(alpha, eval);
+                    if (beta <= alpha) break;
+                } return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let m of moves) {
+                    let eval = minimax(simulateMove(tempBoard, m.r, m.c, BLACK), depth - 1, alpha, beta, true, currentCpuExp);
+                    minEval = Math.min(minEval, eval); beta = Math.min(beta, eval);
+                    if (beta <= alpha) break;
+                } return minEval;
+            }
+        }
+
+        function evaluateBoard(b) {
+            let score = 0;
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (b[r][c] === WHITE || b[r][c] === SPECIAL_WHITE) score += getWeight(r, c);
+                    else if (b[r][c] === BLACK || b[r][c] === SPECIAL_BLACK) score -= getWeight(r, c);
+                }
+            }
+            return score;
+        }
+
+        function getWeight(r, c) {
+            if ((r===0||r===9)&&(c===0||c===9)) return 100;
+            if (r===0||r===9||c===0||c===9) return 15;
+            return 2;
+        }
+
+        function simulateMove(targetBoard, r, c, color) {
+            let newBoard = targetBoard.map(row => [...row]);
+            newBoard[r][c] = color;
+            const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+            directions.forEach(([dr, dc]) => {
+                let nr = r + dr, nc = c + dc, flipList = [];
+                while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && newBoard[nr][nc] !== EMPTY && !isSameColorSim(newBoard[nr][nc], color)) {
+                    flipList.push([nr, nc]); nr += dr; nc += dc;
+                }
+                if (flipList.length > 0 && nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && isSameColorSim(newBoard[nr][nc], color)) {
+                    flipList.forEach(([fr, fc]) => newBoard[fr][fc] = color);
+                }
+            });
+            return newBoard;
+        }
+
+        function getMovesForBoard(b, color, cpuExp) {
+            const moves = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (b[r][c] === EMPTY) {
+                        if (isExpandedZone(r, c) && cpuExp >= MAX_EXPANDED_USES) continue;
+                        let possible = false;
+                        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+                        for (let [dr, dc] of dirs) {
+                            let nr = r + dr, nc = c + dc, found = false;
+                            while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && b[nr][nc] !== EMPTY && !isSameColorSim(b[nr][nc], color)) {
+                                nr += dr; nc += dc; found = true;
+                            }
+                            if (found && nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && isSameColorSim(b[nr][nc], color)) { possible = true; break; }
+                        }
+                        if (possible) moves.push({r, c});
+                    }
+                }
+            } return moves;
+        }
+
+        function isSameColor(v, p) { return p === BLACK ? (v===BLACK || v===SPECIAL_BLACK) : (v===WHITE || v===SPECIAL_WHITE); }
+        function isSameColorSim(v, p) { return p === BLACK ? (v===BLACK || v===SPECIAL_BLACK) : (v===WHITE || v===SPECIAL_WHITE); }
+
+        function placeStandardPiece(targetBoard, r, c, color) {
+            targetBoard[r][c] = color;
+            const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+            dirs.forEach(([dr, dc]) => {
+                let nr = r + dr, nc = c + dc, flipList = [];
+                while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && targetBoard[nr][nc] !== EMPTY && !isSameColor(targetBoard[nr][nc], color)) {
+                    flipList.push([nr, nc]); nr += dr; nc += dc;
+                }
+                if (flipList.length > 0 && nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && isSameColor(targetBoard[nr][nc], color)) {
+                    flipList.forEach(([fr, fc]) => targetBoard[fr][fc] = color);
+                }
+            });
+        }
+
+        function canPlacePiece(targetBoard, r, c, color) {
+            if (targetBoard[r][c] !== EMPTY) return false;
+            const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+            for (let [dr, dc] of dirs) {
+                let nr = r + dr, nc = c + dc, found = false;
+                while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && targetBoard[nr][nc] !== EMPTY && !isSameColor(targetBoard[nr][nc], color)) {
+                    nr += dr; nc += dc; found = true;
+                }
+                if (found && nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && isSameColor(targetBoard[nr][nc], color)) return true;
+            }
+            return false;
+        }
+
+        function getAllValidMoves(color, targetBoard, expandedUsed) {
+            const moves = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (canPlacePiece(targetBoard, r, c, color)) {
+                        if (!isExpandedZone(r, c) || expandedUsed < MAX_EXPANDED_USES) moves.push({r, c});
+                    }
+                }
+            } return moves;
+        }
+
+        function hasValidMoves(color, targetBoard, expandedUsed) { return getAllValidMoves(color, targetBoard, expandedUsed).length > 0; }
+
+        function updateUI() {
+            const cells = document.querySelectorAll('.cell');
+            let bCount = 0, wCount = 0;
+            cells.forEach(cell => {
+                const r = parseInt(cell.dataset.row), c = parseInt(cell.dataset.col);
+                const pd = cell.querySelector('.piece'); pd.className = 'piece';
+                if (board[r][c] !== EMPTY) {
+                    pd.classList.add('show');
+                    if (board[r][c] === BLACK || board[r][c] === SPECIAL_BLACK) { pd.classList.add('black'); bCount++; }
+                    else { pd.classList.add('white'); wCount++; }
+                    if (board[r][c] === SPECIAL_BLACK || board[r][c] === SPECIAL_WHITE) pd.classList.add('special');
+                }
+            });
+            scoreDisplay.textContent = `黒: ${bCount} | 白: ${wCount}`;
+            abilityDisplay.textContent = `スペシャル: ${playerHasSpecial ? '1回' : 'なし'} | 射殺: ${playerShootsLeft}回`;
+            zoneDisplay.textContent = `外周使用枠: あなた ${MAX_EXPANDED_USES - playerExpandedUses}/${MAX_EXPANDED_USES} | CPU ${MAX_EXPANDED_USES - cpuExpandedUses}/${MAX_EXPANDED_USES}`;
+            btnSpecial.disabled = !playerHasSpecial || currentPlayer !== BLACK;
+            btnShoot.disabled = playerShootsLeft <= 0 || currentPlayer !== BLACK;
+            turnDisplay.textContent = (currentPlayer === BLACK && !isThinking) ? "あなたの番です（黒）" : (currentPlayer === WHITE && !isThinking) ? "CPUのターン..." : "";
+        }
+
+        function triggerVFX(type, r, c) {
+            const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+            if (!cell) return;
+            const rect = cell.getBoundingClientRect(); 
+            const containerRect = containerElement.getBoundingClientRect();
+            const x = rect.left - containerRect.left + rect.width / 2, y = rect.top - containerRect.top + rect.height / 2;
+            if (type === 'special') {
+                const ripple = document.createElement('div'); ripple.className = 'ripple-gold';
+                ripple.style.left = `${x - 15}px`; ripple.style.top = `${y - 15}px`; ripple.style.width = '30px'; ripple.style.height = '30px';
+                vfxLayer.appendChild(ripple); setTimeout(() => ripple.remove(), 600);
+                for (let i = 0; i < 15; i++) createParticle(x, y, '#ffd700');
+            } else if (type === 'shoot') {
+                containerElement.classList.remove('shake'); void containerElement.offsetWidth; containerElement.classList.add('shake');
+                const shock = document.createElement('div'); shock.className = 'shockwave-red';
+                shock.style.left = `${x - 20}px`; shock.style.top = `${y - 20}px`; shock.style.width = '40px'; shock.style.height = '40px';
+                vfxLayer.appendChild(shock); setTimeout(() => shock.remove(), 400);
+                for (let i = 0; i < 12; i++) createParticle(x, y, '#ff0000');
+            }
+        }
+
+        function createParticle(x, y, color) {
+            const p = document.createElement('div'); p.className = 'particle'; p.style.backgroundColor = color;
+            p.style.left = `${x}px`; p.style.top = `${y}px`; vfxLayer.appendChild(p);
+            const angle = Math.random() * Math.PI * 2, velocity = 1 + Math.random() * 3;
+            let px = x, py = y, opacity = 1;
+            const anim = setInterval(() => {
+                px += Math.cos(angle) * velocity; py += Math.sin(angle) * velocity; opacity -= 0.05;
+                p.style.left = `${px}px`; p.style.top = `${py}px`; p.style.opacity = opacity;
+                if (opacity <= 0) { clearInterval(anim); p.remove(); }
+            }, 20);
+        }
+
+        function endGame() {
+            let b = 0, w = 0;
+            board.forEach(row => row.forEach(cell => { if (cell===BLACK || cell===SPECIAL_BLACK) b++; else if (cell===WHITE || cell===SPECIAL_WHITE) w++; }));
+            alert(`終了！ ${b > w ? 'あなたの勝ち' : (w > b ? 'CPUの勝ち' : '引き分け')} (${b}:${w})`);
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
